@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/* Calm palette. No red anywhere: nothing in this app is a failure state. */
+:root {
+  --background: #f7f5f0;
+  --surface: #ffffff;
+  --foreground: #1d2129;
+  --muted: #5b6270;
+  --line: #e3dfd6;
+  --accent: #2f6f5e;
+  --accent-fg: #ffffff;
+  --accent-soft: #dcebe5;
+  --gentle: #e9e4f5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #14161a;
+    --surface: #1d2026;
+    --foreground: #eceae4;
+    --muted: #a4a9b3;
+    --line: #2e323a;
+    --accent: #6cc3a8;
+    --accent-fg: #0f1a16;
+    --accent-soft: #1f3a32;
+    --gentle: #2a2638;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-gentle: var(--gentle);
+  --font-sans: var(--font-geist-sans);
+}
+
+html {
+  font-size: 17px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.animate-pop {
+  animation: pop 450ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pop {
+    animation: none;
+  }
+}
