@@ -1,12 +1,11 @@
 import { Suspense } from "react";
 import { logout } from "@/app/actions";
-import { EnablePush } from "@/components/enable-push";
 import { Nav } from "@/components/nav";
 import { btn, card } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { FocusMode } from "./focus-mode";
 import { SettingsForm } from "./settings-form";
-import { TestPushButton } from "./test-push-button";
+import { PushStatus } from "./push-status";
 
 export default function SettingsPage() {
   return (
@@ -27,7 +26,7 @@ async function Settings() {
 
       <section className={`${card} flex flex-col gap-4`}>
         <h2 className="text-xl font-semibold">Notifications</h2>
-        {user.push_subscription ? <TestPushButton /> : <EnablePush compact />}
+        <PushStatus serverEndpoint={user.push_subscription?.endpoint ?? null} />
       </section>
 
       <FocusMode focusUntil={focusUntil} />

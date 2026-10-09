@@ -9,7 +9,7 @@ export function TestPushButton() {
   const [pending, startTransition] = useTransition();
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-muted">Check-ins are on for this device.</p>
+      <p className="text-muted">Check-ins come to this device.</p>
       <button
         className={btn.secondary}
         disabled={pending}

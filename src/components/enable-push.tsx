@@ -33,7 +33,15 @@ function detect(): State {
 const noSubscribe = () => () => {};
 
 /** Subscribes this device to push. Shown on home until a subscription exists. */
-export function EnablePush({ compact = false }: { compact?: boolean }) {
+export function EnablePush({
+  compact = false,
+  label = "Allow notifications",
+  intro = "The app nudges you, so you don't have to remember.",
+}: {
+  compact?: boolean;
+  label?: string;
+  intro?: string;
+}) {
   const router = useRouter();
   const detected = useSyncExternalStore(noSubscribe, detect, () => "checking" as State);
   const [override, setState] = useState<State | null>(null);
@@ -84,10 +92,10 @@ export function EnablePush({ compact = false }: { compact?: boolean }) {
   return (
     <section className={compact ? "flex flex-col gap-3" : `${card} flex flex-col gap-4`}>
       {!compact && <h2 className="text-xl font-semibold">Turn on check-ins</h2>}
-      {body ?? <p className="text-muted">The app nudges you, so you don&apos;t have to remember.</p>}
+      {body ?? <p className="text-muted">{intro}</p>}
       {(state === "ready" || state === "working" || state === "error") && (
         <button onClick={enable} disabled={state === "working"} className={btn.primary}>
-          {state === "working" ? "Turning on…" : "Allow notifications"}
+          {state === "working" ? "Turning on…" : label}
         </button>
       )}
     </section>
