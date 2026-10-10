@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   closestCenter,
@@ -44,6 +44,15 @@ export function GoalEditor({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // A resumed PWA can show a page rendered hours ago; re-check which day we are planning.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [router]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
@@ -79,7 +88,11 @@ export function GoalEditor({
         ...done.map((g) => ({ id: g.id, title: g.title })),
         ...items.map((i) => ({ id: i.id, title: i.title })),
       ]);
-      if (error) return setMessage(error);
+      if (error) {
+        setMessage(error);
+        router.refresh();
+        return;
+      }
       setDirty(false);
       setMessage("Saved.");
       router.refresh();

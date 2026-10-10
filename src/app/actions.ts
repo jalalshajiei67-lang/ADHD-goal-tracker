@@ -37,10 +37,8 @@ export type GoalDraft = { id: string | null; title: string };
 export async function saveGoalList(date: string, goals: GoalDraft[]): Promise<string | null> {
   const user = await requireUser();
   const today = planningDate(user, new Date());
-  // Only today/tomorrow-ish dates are editable from the app.
-  if (date !== today && date !== addDays(today, 1) && date !== addDays(today, -1)) {
-    return "That day can't be edited.";
-  }
+  // The page may have been open since before the planning day rolled over.
+  if (date !== today) return "The day just changed. Reloading — please re-enter your goals.";
   const clean = goals
     .map((g) => ({ id: g.id, title: g.title.trim().slice(0, 120) }))
     .filter((g) => g.title.length > 0);
