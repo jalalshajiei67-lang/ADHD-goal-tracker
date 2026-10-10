@@ -96,7 +96,9 @@ self.addEventListener("notificationclick", (event) => {
   const { url, goalId } = event.notification.data || {};
   event.notification.close();
 
-  if (goalId && (event.action === "done" || event.action === "not_yet")) {
+  // Only "done" is answered from the notification (see messages.checkin). Any other tap,
+  // including "not_yet" from notifications sent before that change, opens the check-in screen.
+  if (goalId && event.action === "done") {
     // If the ack fails (offline, logged out), fall back to opening the check-in screen.
     event.waitUntil(acknowledge(goalId, event.action).catch(() => openUrl(url)));
     return;

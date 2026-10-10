@@ -68,10 +68,9 @@ export const messages = {
     url: `/checkin/${goalId}`,
     tag: "checkin",
     goalId,
-    actions: [
-      { action: "done", title: "Done" },
-      { action: "not_yet", title: "Not yet" },
-    ],
+    // One button only: with two, some Android phones reported a Done tap as "not_yet".
+    // Tapping the notification itself opens the check-in screen for the other answers.
+    actions: [{ action: "done", title: "Done" }],
     requireInteraction: true,
   }),
   next: (title: string): PushPayload => ({
