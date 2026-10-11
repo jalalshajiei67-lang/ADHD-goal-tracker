@@ -65,7 +65,7 @@ export const messages = {
   checkin: (goalId: string, title: string): PushPayload => ({
     title: "Did you finish?",
     body: title,
-    url: `/checkin/${goalId}`,
+    url: `/checkin/${goalId}?alarm=1`,
     tag: "checkin",
     goalId,
     // One button only: with two, some Android phones reported a Done tap as "not_yet".

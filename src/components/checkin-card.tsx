@@ -4,12 +4,14 @@ import { useEffect, useState, useTransition } from "react";
 import { respond } from "@/app/actions";
 import { formatElapsed } from "@/lib/time";
 import type { CheckinResponse } from "@/lib/types";
+import { Alarm } from "./alarm";
 import { btn, card } from "./ui";
 
 type Props = {
   goal: { id: string; title: string };
   doneToday: number;
   lastAskedAt: string | null;
+  ring?: boolean;
 };
 
 function useNow(everyMs: number) {
@@ -22,13 +24,15 @@ function useNow(everyMs: number) {
 }
 
 /** The single active goal with Done / Not yet. Future goals are deliberately not shown. */
-export function CheckinCard({ goal, doneToday, lastAskedAt }: Props) {
+export function CheckinCard({ goal, doneToday, lastAskedAt, ring = false }: Props) {
   const now = useNow(30_000);
   const [pending, startTransition] = useTransition();
   const [celebrated, setCelebrated] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [ringing, setRinging] = useState(ring);
 
   function answer(response: CheckinResponse) {
+    setRinging(false);
     startTransition(async () => {
       const result = await respond(goal.id, response);
       if (response === "done" && result.ok) {
@@ -58,6 +62,8 @@ export function CheckinCard({ goal, doneToday, lastAskedAt }: Props) {
           </span>
         </div>
       )}
+
+      <Alarm ringing={ringing} onSilence={() => setRinging(false)} />
 
       <section className={`${card} flex flex-col gap-6`} aria-labelledby="active-goal">
         <div className="flex flex-col gap-2">

@@ -24,7 +24,8 @@ self.addEventListener("push", (event) => {
     renotify: data.tag === "checkin",
     requireInteraction: Boolean(data.requireInteraction),
     actions: data.actions || [],
-    vibrate: [80, 40, 80],
+    vibrate: data.tag === "checkin" ? [500, 250, 500, 250, 500, 250, 500] : [80, 40, 80],
+    silent: false,
   };
 
   // Browsers differ in which options they accept (Firefox has no action buttons, for one).

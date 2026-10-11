@@ -7,16 +7,20 @@ import { requireUser } from "@/lib/auth";
 import { getGoals, getOwnedGoal, lastCheckinAt } from "@/lib/data";
 
 // Deep-link target of a check-in notification (the only path on iOS, which has no action buttons).
-export default function CheckinPage({ params }: PageProps<"/checkin/[goalId]">) {
+export default function CheckinPage({ params, searchParams }: PageProps<"/checkin/[goalId]">) {
   return (
     <Suspense fallback={<p className="text-muted">Loading…</p>}>
-      <Checkin params={params} />
+      <Checkin params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Checkin({ params }: Pick<PageProps<"/checkin/[goalId]">, "params">) {
+async function Checkin({
+  params,
+  searchParams,
+}: Pick<PageProps<"/checkin/[goalId]">, "params" | "searchParams">) {
   const { goalId } = await params;
+  const ring = (await searchParams).alarm === "1";
   const user = await requireUser();
   const owned = await getOwnedGoal(user.id, goalId);
 
@@ -42,6 +46,7 @@ async function Checkin({ params }: Pick<PageProps<"/checkin/[goalId]">, "params"
         goal={{ id: owned.goal.id, title: owned.goal.title }}
         doneToday={goals.filter((g) => g.completed_at).length}
         lastAskedAt={last?.toISOString() ?? null}
+        ring={ring}
       />
       <Nav />
     </div>
