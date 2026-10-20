@@ -4,7 +4,7 @@ import { CheckinCard } from "@/components/checkin-card";
 import { Nav } from "@/components/nav";
 import { btn, card } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
-import { getGoals, getOwnedGoal, lastCheckinAt } from "@/lib/data";
+import { getGoals, getOwnedGoal, lastCheckinAt, notYetInARow } from "@/lib/data";
 
 // Deep-link target of a check-in notification (the only path on iOS, which has no action buttons).
 export default function CheckinPage({ params, searchParams }: PageProps<"/checkin/[goalId]">) {
@@ -40,12 +40,19 @@ async function Checkin({
 
   const goals = await getGoals(owned.goal.goal_day_id);
   const last = await lastCheckinAt(user.id);
+  const notYetCount = await notYetInARow(owned.goal.id);
   return (
     <div className="flex flex-1 flex-col gap-6">
       <CheckinCard
-        goal={{ id: owned.goal.id, title: owned.goal.title }}
+        key={owned.goal.id}
+        goal={{
+          id: owned.goal.id,
+          title: owned.goal.title,
+          nextStep: owned.goal.next_step,
+        }}
         doneToday={goals.filter((g) => g.completed_at).length}
         lastAskedAt={last?.toISOString() ?? null}
+        notYetCount={notYetCount}
         ring={ring}
       />
       <Nav />

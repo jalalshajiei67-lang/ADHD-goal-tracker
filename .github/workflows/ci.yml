@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          APP_PASSPHRASE: ci-passphrase
+          SESSION_SECRET: ci-session-secret
+          SUPABASE_URL: http://127.0.0.1:54321
+          SUPABASE_SERVICE_ROLE_KEY: ci-service-role
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: BAdummy-public-key
+          VAPID_PRIVATE_KEY: dummy-private-key
+          VAPID_SUBJECT: mailto:ci@example.com
+
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: npm ci
+      - name: Start Supabase
+        run: >-
+          supabase start
+          -x studio,storage-api,imgproxy,realtime,mailpit,edge-runtime,logflare,vector,supavisor
+      - name: Export test database
+        run: |
+          supabase status -o env > supabase.env
+          set -a
+          . ./supabase.env
+          set +a
+          echo "SUPABASE_TEST_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "SUPABASE_TEST_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
+      - run: npm run test:db
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop --no-backup

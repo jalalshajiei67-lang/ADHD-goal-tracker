@@ -3,7 +3,7 @@ import { db, must, mustHave } from "./db";
 import { getDayWithGoals, unansweredInARow } from "./data";
 import { activeGoal, NUDGE_EVERY_MIN, planTick, type TickAction } from "./plan";
 import { messages, sendPush } from "./push";
-import { addMinutes, localTime } from "./time";
+import { addMinutes, addDays, localTime, minutesOfDay } from "./time";
 import type { GoalDay, User } from "./types";
 
 /**
@@ -51,8 +51,7 @@ async function run(user: User, action: TickAction, now: Date): Promise<string | 
           .select("id"),
       );
       if (!ok) return null;
-      const date = localTime(now, user.timezone).date;
-      await sendPush(user, messages.summary(date, action.done, action.total));
+      await sendPush(user, messages.summary(action.localDate, action.done, action.total));
       return "summary";
     }
     case "nudge": {
@@ -109,12 +108,29 @@ export async function runTick(now = new Date()) {
   for (const user of users) {
     const sent: string[] = [];
     try {
+      must(
+        await db().from("users").update({ last_tick_at: now.toISOString() }).eq("id", user.id),
+      );
       const local = localTime(now, user.timezone);
       const { day, goals } = await getDayWithGoals(user.id, local.date);
+      // A 24:00 end hour summarizes yesterday on ticks between midnight and the
+      // next start hour, so fetch that day only in that narrow window.
+      const previous =
+        user.checkin_end_hour === 24 && minutesOfDay(local) < user.checkin_start_hour * 60
+          ? await getDayWithGoals(user.id, addDays(local.date, -1))
+          : undefined;
       const active = activeGoal(goals);
       const unanswered = active ? await unansweredInARow(active.id) : 0;
-      const actions = planTick({ user, now, day, goals, unansweredInARow: unanswered });
-      for (const action of actions) {
+      const actions = planTick({
+        user,
+        now,
+        day,
+        goals,
+        unansweredInARow: unanswered,
+        previous,
+      });
+      // One push per tick: the planner already prioritizes.
+      for (const action of actions.slice(0, 1)) {
         const result = await run(user, action, now);
         if (result) sent.push(result);
       }

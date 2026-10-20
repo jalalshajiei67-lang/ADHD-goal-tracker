@@ -22,6 +22,11 @@ export function localTime(at: Date, timeZone: string): LocalTime {
   };
 }
 
+/** Minutes since local midnight, 0-1439. */
+export function minutesOfDay({ hour, minute }: LocalTime): number {
+  return hour * 60 + minute;
+}
+
 export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);

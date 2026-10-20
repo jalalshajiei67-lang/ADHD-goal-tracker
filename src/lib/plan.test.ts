@@ -13,6 +13,8 @@ const user = (over: Partial<User> = {}): User => ({
   next_checkin_at: null,
   last_nightly_date: null,
   focus_until: null,
+  last_tick_at: null,
+  last_push_at: null,
   created_at: "2026-01-01T00:00:00Z",
   ...over,
 });
@@ -32,6 +34,7 @@ const goal = (priority: number, done = false): Goal => ({
   goal_day_id: "d1",
   priority,
   title: `Goal ${priority}`,
+  next_step: null,
   completed_at: done ? "2026-10-09T07:00:00Z" : null,
   carried_from: null,
 });
@@ -103,7 +106,7 @@ describe("planTick", () => {
   it("AC-8: sends the day summary after the window ends", () => {
     const goals = [goal(1, true), goal(2, true), goal(3)];
     expect(plan({ now: berlin("20:00"), goals })).toEqual([
-      { kind: "summary", dayId: "d1", done: 2, total: 3 },
+      { kind: "summary", dayId: "d1", done: 2, total: 3, localDate: "2026-10-09" },
     ]);
     const sent = day({ summary_sent_at: berlin("20:00").toISOString() });
     expect(plan({ now: berlin("20:05"), goals, day: sent })).toEqual([]);
@@ -126,11 +129,56 @@ describe("planTick", () => {
     const ny = user({ timezone: "America/New_York" });
     expect(plan({ user: ny, now, goals: [goal(1)] })).toEqual([]);
   });
+
+  it("D-11: a 24:00 window summarizes yesterday after midnight", () => {
+    const previous = {
+      day: day({ id: "d0", goal_date: "2026-10-08" }),
+      goals: [goal(1, true), goal(2)],
+    };
+    const midnight = user({ checkin_end_hour: 24 });
+    expect(plan({ user: midnight, now: berlin("00:05"), previous })).toEqual([
+      { kind: "summary", dayId: "d0", done: 1, total: 2, localDate: "2026-10-08" },
+    ]);
+  });
+
+  it("D-11: a 24:00 window does not summarize before midnight", () => {
+    const midnight = user({ checkin_end_hour: 24, last_nightly_date: "2026-10-09" });
+    const actions = plan({
+      user: midnight,
+      now: berlin("23:55"),
+      day: day({ nudge_sent_at: berlin("23:00").toISOString() }),
+      goals: [],
+    });
+    expect(actions.some((a) => a.kind === "summary")).toBe(false);
+  });
+
+  it("D-11: a 24:00 window stops summarizing when the next window starts", () => {
+    const previous = {
+      day: day({ id: "d0", goal_date: "2026-10-08" }),
+      goals: [goal(1, true)],
+    };
+    const midnight = user({ checkin_end_hour: 24 });
+    const actions = plan({ user: midnight, now: berlin("08:05"), previous, goals: [goal(1)] });
+    expect(actions.some((a) => a.kind === "summary")).toBe(false);
+  });
+
+  it("sends only the nightly prompt when it collides with the summary", () => {
+    expect(plan({ now: berlin("21:00"), goals: [goal(1, true)] })).toEqual([
+      { kind: "nightly", localDate: "2026-10-09" },
+    ]);
+  });
 });
 
 describe("planningDate", () => {
   it("targets today during the day and tomorrow after the window", () => {
     expect(planningDate(user(), berlin("19:59"))).toBe("2026-10-09");
     expect(planningDate(user(), berlin("21:00"))).toBe("2026-10-10");
+  });
+
+  it("uses the nightly hour as the cutoff when the window ends at midnight", () => {
+    const midnight = user({ checkin_end_hour: 24 });
+    expect(planningDate(midnight, berlin("20:59"))).toBe("2026-10-09");
+    expect(planningDate(midnight, berlin("21:00"))).toBe("2026-10-10");
+    expect(planningDate(midnight, berlin("23:59"))).toBe("2026-10-10");
   });
 });

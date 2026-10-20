@@ -20,28 +20,35 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { saveGoalList } from "@/app/actions";
+import { saveGoalList, addTemplate, removeTemplate } from "@/app/actions";
 import { btn, input } from "@/components/ui";
+import { VoiceInput } from "@/components/voice-input";
 
 const MAX = 5;
 
 type Item = { key: string; id: string | null; title: string };
 type Done = { id: string; title: string };
+type Template = { id: string; title: string };
 
 export function GoalEditor({
   date,
   done,
   open,
+  templates,
+  autoFocus = false,
 }: {
   date: string;
   done: Done[];
   open: { id: string; title: string }[];
+  templates: Template[];
+  autoFocus?: boolean;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>(() => open.map((g) => ({ key: g.id, ...g })));
   const [draft, setDraft] = useState("");
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [editingRepeats, setEditingRepeats] = useState(false);
   const [pending, startTransition] = useTransition();
 
   // A resumed PWA can show a page rendered hours ago; re-check which day we are planning.
@@ -52,6 +59,10 @@ export function GoalEditor({
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [router]);
+
+  useEffect(() => {
+    if (autoFocus) document.getElementById("new-goal")?.focus();
+  }, [autoFocus]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -73,6 +84,27 @@ export function GoalEditor({
     if (!title || full) return;
     change([...items, { key: crypto.randomUUID(), id: null, title }]);
     setDraft("");
+  }
+
+  function addRepeat(title: string) {
+    if (full) return;
+    if (items.some((i) => i.title.trim().toLowerCase() === title.trim().toLowerCase())) return;
+    change([...items, { key: crypto.randomUUID(), id: null, title }]);
+  }
+
+  function saveRepeat(title: string) {
+    startTransition(async () => {
+      const error = await addTemplate(title);
+      setMessage(error ?? "Saved as a repeat.");
+      if (!error) router.refresh();
+    });
+  }
+
+  function dropRepeat(id: string) {
+    startTransition(async () => {
+      await removeTemplate(id);
+      router.refresh();
+    });
   }
 
   function onDragEnd({ active, over }: DragEndEvent) {
@@ -101,6 +133,48 @@ export function GoalEditor({
 
   return (
     <div className="flex flex-col gap-5">
+      {templates.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-muted">Repeats — tap to add</p>
+            <button
+              type="button"
+              className={btn.quiet}
+              onClick={() => setEditingRepeats((v) => !v)}
+            >
+              {editingRepeats ? "Done" : "Edit"}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {templates.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center rounded-xl border-2 border-line bg-surface"
+              >
+                <button
+                  type="button"
+                  disabled={full}
+                  onClick={() => addRepeat(t.title)}
+                  className="min-h-12 px-3 text-left disabled:opacity-50"
+                >
+                  {t.title}
+                </button>
+                {editingRepeats && (
+                  <button
+                    type="button"
+                    aria-label={`Delete repeat ${t.title}`}
+                    onClick={() => dropRepeat(t.id)}
+                    className="flex min-h-12 min-w-12 items-center justify-center border-l-2 border-line text-xl text-muted"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <form onSubmit={add} className="flex gap-2">
         <label htmlFor="new-goal" className="sr-only">
           New goal
@@ -123,6 +197,15 @@ export function GoalEditor({
           Add
         </button>
       </form>
+      {!full && (
+        <div className="flex justify-end">
+          <VoiceInput
+            onText={(text) =>
+              setDraft((current) => (current ? `${current} ${text}` : text).slice(0, 120))
+            }
+          />
+        </div>
+      )}
 
       {done.length > 0 && (
         <ul className="flex flex-col gap-2" aria-label="Finished">
@@ -151,6 +234,10 @@ export function GoalEditor({
                       change(items.map((i) => (i.key === item.key ? { ...i, title } : i)))
                     }
                     onRemove={() => change(items.filter((i) => i.key !== item.key))}
+                    onRepeat={() => saveRepeat(item.title)}
+                    isRepeat={templates.some(
+                      (t) => t.title.toLowerCase() === item.title.trim().toLowerCase(),
+                    )}
                   />
                 ))}
               </ol>
@@ -174,13 +261,17 @@ export function GoalEditor({
 function GoalRow({
   item,
   position,
+  isRepeat,
   onRename,
   onRemove,
+  onRepeat,
 }: {
   item: Item;
   position: number;
+  isRepeat: boolean;
   onRename: (title: string) => void;
   onRemove: () => void;
+  onRepeat: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.key,
@@ -213,6 +304,20 @@ function GoalRow({
           className="min-h-12 w-full rounded-lg bg-transparent px-2 text-lg outline-none focus:bg-background"
         />
       </label>
+      <button
+        type="button"
+        onClick={onRepeat}
+        disabled={isRepeat}
+        aria-label={
+          isRepeat
+            ? `${item.title} is already a repeat`
+            : `Save ${item.title} as a repeat`
+        }
+        title={isRepeat ? "Already a repeat" : "Save as a repeat"}
+        className="flex min-h-12 min-w-12 items-center justify-center rounded-xl text-xl text-muted hover:bg-background disabled:opacity-30"
+      >
+        ↻
+      </button>
       <button
         type="button"
         onClick={onRemove}

@@ -80,7 +80,10 @@ export function SettingsForm({ initial, zones }: { initial: SettingsInput; zones
           </select>
         </label>
       </div>
-
+      <p className="text-sm text-muted">
+        24:00 means check-ins run until midnight; that day&apos;s summary arrives just after
+        midnight. The nightly prompt always points at tomorrow.
+      </p>
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 font-medium">Ask me every</legend>
         <div className="grid grid-cols-3 gap-2">

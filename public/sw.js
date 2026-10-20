@@ -3,6 +3,54 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
+function urlBase64ToUint8Array(base64) {
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const raw = atob((base64 + padding).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+// Browsers rotate push subscriptions occasionally. Without this, pushes die
+// silently until the app is opened and the user re-enables notifications.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const old = event.oldSubscription;
+        let key = old && old.options && old.options.applicationServerKey;
+        if (!key) {
+          const res = await fetch("/api/push/key");
+          if (!res.ok) throw new Error(`key failed: ${res.status}`);
+          key = (await res.json()).key;
+        }
+        const subscription =
+          event.newSubscription ||
+          (await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey:
+              typeof key === "string" ? urlBase64ToUint8Array(key) : key,
+          }));
+        const res = await fetch("/api/push/subscribe", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subscription: subscription.toJSON(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }),
+        });
+        if (!res.ok) throw new Error(`subscribe failed: ${res.status}`);
+        const windows = await self.clients.matchAll({
+          type: "window",
+          includeUncontrolled: true,
+        });
+        for (const client of windows) client.postMessage({ type: "refresh" });
+      } catch (err) {
+        console.error("pushsubscriptionchange failed", err);
+      }
+    })(),
+  );
+});
+
 self.addEventListener("push", (event) => {
   let data;
   try {

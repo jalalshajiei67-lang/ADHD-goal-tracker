@@ -1,20 +1,45 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { refresh } from "next/cache";
 import { requireUser } from "@/lib/auth";
-import { acknowledge } from "@/lib/checkin";
-import { carryGoal, saveGoals, updateUser, type CarryResult } from "@/lib/data";
+import { acknowledge, setNotYetReason as recordNotYetReason } from "@/lib/checkin";
+import {
+  carryGoal,
+  deleteTemplate,
+  getOwnedGoal,
+  saveGoals,
+  saveTemplate,
+  setNextStep,
+  updateUser,
+  type CarryResult,
+} from "@/lib/data";
 import { planningDate } from "@/lib/plan";
 import { sendPush } from "@/lib/push";
 import { createSessionToken, passphraseMatches, SESSION_COOKIE, SESSION_DAYS } from "@/lib/session";
+import {
+  clearLoginFailures,
+  clientIp,
+  loginAllowed,
+  recordLoginFailure,
+} from "@/lib/rate-limit";
 import { addDays, isValidTimeZone } from "@/lib/time";
-import type { CheckinResponse } from "@/lib/types";
+import { NOT_YET_REASONS, type CheckinResponse, type NotYetReason } from "@/lib/types";
 
 export async function login(_prev: string | null, formData: FormData): Promise<string | null> {
+  const ip = clientIp(await headers());
+  const gate = await loginAllowed(ip);
+  if (!gate.allowed) {
+    return `Too many attempts. Try again in ${gate.retryAfterMin} min.`;
+  }
+
   const passphrase = String(formData.get("passphrase") ?? "");
-  if (!passphraseMatches(passphrase)) return "That passphrase didn't match. Try again.";
+  if (!passphraseMatches(passphrase)) {
+    await recordLoginFailure(ip);
+    return "That passphrase didn't match. Try again.";
+  }
+  await clearLoginFailures(ip);
 
   (await cookies()).set(SESSION_COOKIE, await createSessionToken(), {
     httpOnly: true,
@@ -48,16 +73,59 @@ export async function saveGoalList(date: string, goals: GoalDraft[]): Promise<st
   return null;
 }
 
-export async function respond(goalId: string, response: CheckinResponse) {
+export async function respond(
+  goalId: string,
+  response: CheckinResponse,
+  reason?: NotYetReason,
+) {
   const user = await requireUser();
-  const result = await acknowledge(user, goalId, response);
+  const cleanReason =
+    response === "not_yet" && reason && NOT_YET_REASONS.includes(reason) ? reason : null;
+  const result = await acknowledge(user, goalId, response, { reason: cleanReason });
   refresh();
   return result;
+}
+
+export async function setNotYetReason(
+  checkinId: string,
+  reason: NotYetReason,
+): Promise<boolean> {
+  const user = await requireUser();
+  if (!NOT_YET_REASONS.includes(reason)) return false;
+  const ok = await recordNotYetReason(user, checkinId, reason);
+  refresh();
+  return ok;
+}
+
+/** Stores a smaller first step, or clears it when the text is empty. */
+export async function saveNextStep(goalId: string, text: string): Promise<string | null> {
+  const user = await requireUser();
+  const owned = await getOwnedGoal(user.id, goalId);
+  if (!owned) return "That goal no longer exists.";
+  const clean = text.trim().slice(0, 160);
+  await setNextStep(goalId, clean.length > 0 ? clean : null);
+  refresh();
+  return null;
 }
 
 export async function carryToTomorrow(goalId: string, fromDate: string): Promise<CarryResult> {
   const user = await requireUser();
   return carryGoal(user.id, goalId, addDays(fromDate, 1));
+}
+
+export async function addTemplate(title: string): Promise<string | null> {
+  const user = await requireUser();
+  const clean = title.trim().slice(0, 120);
+  if (!clean) return "Type a goal first.";
+  await saveTemplate(user.id, clean);
+  refresh();
+  return null;
+}
+
+export async function removeTemplate(id: string): Promise<void> {
+  const user = await requireUser();
+  await deleteTemplate(user.id, id);
+  refresh();
 }
 
 export type SettingsInput = {
@@ -78,6 +146,9 @@ export async function saveSettings(input: SettingsInput): Promise<string | null>
     return "Pick start and end hours.";
   }
   if (input.checkin_start_hour >= input.checkin_end_hour) return "Start must be before end.";
+  if (input.checkin_start_hour === 0 && input.checkin_end_hour === 24) {
+    return "With check-ins ending at midnight, start at 01:00 or later.";
+  }
   if (![15, 30, 60].includes(input.checkin_interval_min)) return "Pick an interval.";
 
   // A shorter interval applies right away: pull an already-scheduled check-in closer.
@@ -90,11 +161,16 @@ export async function saveSettings(input: SettingsInput): Promise<string | null>
   return null;
 }
 
-export async function setFocus(hours: number) {
+export async function setFocus(minutes: number): Promise<string | null> {
   const user = await requireUser();
-  const until = hours > 0 ? new Date(Date.now() + hours * 3_600_000).toISOString() : null;
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > 480) {
+    return "Pick a focus length between 0 and 8 hours.";
+  }
+  const until =
+    minutes > 0 ? new Date(Date.now() + minutes * 60_000).toISOString() : null;
   await updateUser(user.id, { focus_until: until });
   refresh();
+  return null;
 }
 
 export async function sendTestPush(): Promise<boolean> {

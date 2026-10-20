@@ -4,12 +4,17 @@ import { getGoals, getOwnedGoal } from "./data";
 import { activeGoal } from "./plan";
 import { messages, sendPush } from "./push";
 import { addMinutes } from "./time";
-import type { CheckinResponse, User } from "./types";
+import type { CheckinResponse, NotYetReason, User } from "./types";
 
 export const SNOOZE_MIN = 60;
 
 export type AckResult =
-  | { ok: true; completedNow: boolean; next: { id: string; title: string } | null }
+  | {
+      ok: true;
+      completedNow: boolean;
+      checkinId: string | null;
+      next: { id: string; title: string } | null;
+    }
   | { ok: false; error: "not_found" };
 
 /**
@@ -21,17 +26,33 @@ export async function acknowledge(
   user: User,
   goalId: string,
   response: CheckinResponse,
-  { notify = false } = {},
+  { notify = false, reason = null }: { notify?: boolean; reason?: NotYetReason | null } = {},
 ): Promise<AckResult> {
   const owned = await getOwnedGoal(user.id, goalId);
   if (!owned) return { ok: false, error: "not_found" };
   const now = new Date();
   const nowIso = now.toISOString();
 
+  // Remember which check-in this answers, so a follow-up reason can target it.
+  const open = must(
+    await db()
+      .from("checkins")
+      .select("id")
+      .eq("goal_id", goalId)
+      .is("responded_at", null)
+      .order("sent_at", { ascending: false })
+      .limit(1),
+  ) as { id: string }[];
+  const checkinId = open[0]?.id ?? null;
+
   must(
     await db()
       .from("checkins")
-      .update({ response, responded_at: nowIso })
+      .update({
+        response,
+        responded_at: nowIso,
+        reason: response === "not_yet" ? reason : null,
+      })
       .eq("goal_id", goalId)
       .is("responded_at", null),
   );
@@ -57,11 +78,15 @@ export async function acknowledge(
     );
     completedNow = rows.length > 0;
     if (completedNow) {
-      // Next goal gets a full interval before its first check-in.
+      // Next goal gets a full interval before its first check-in, and finishing
+      // the focused goal ends focus mode.
       must(
         await db()
           .from("users")
-          .update({ next_checkin_at: addMinutes(now, user.checkin_interval_min).toISOString() })
+          .update({
+            next_checkin_at: addMinutes(now, user.checkin_interval_min).toISOString(),
+            focus_until: null,
+          })
           .eq("id", user.id),
       );
     }
@@ -84,5 +109,27 @@ export async function acknowledge(
     await sendPush(user, messages.next(next.title));
   }
 
-  return { ok: true, completedNow, next: next ? { id: next.id, title: next.title } : null };
+  return { ok: true, completedNow, checkinId, next: next ? { id: next.id, title: next.title } : null };
+}
+
+/**
+ * Attaches a reason to the check-in the user just answered "not yet". The reason
+ * is optional and only ever updates a check-in that belongs to this user.
+ */
+export async function setNotYetReason(
+  user: User,
+  checkinId: string,
+  reason: NotYetReason,
+): Promise<boolean> {
+  const row = must(
+    await db()
+      .from("checkins")
+      .select("id, user_id, response")
+      .eq("id", checkinId)
+      .maybeSingle(),
+  ) as { id: string; user_id: string; response: string | null } | null;
+  if (!row || row.user_id !== user.id || row.response !== "not_yet") return false;
+
+  must(await db().from("checkins").update({ reason }).eq("id", checkinId));
+  return true;
 }

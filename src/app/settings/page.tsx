@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { FocusMode } from "./focus-mode";
 import { SettingsForm } from "./settings-form";
 import { PushStatus } from "./push-status";
+import { Health } from "./health";
 
 export default function SettingsPage() {
   return (
@@ -27,6 +28,9 @@ async function Settings() {
       <section className={`${card} flex flex-col gap-4`}>
         <h2 className="text-xl font-semibold">Notifications</h2>
         <PushStatus serverEndpoint={user.push_subscription?.endpoint ?? null} />
+        {user.push_subscription && (
+          <Health lastTickAt={user.last_tick_at} lastPushAt={user.last_push_at} />
+        )}
       </section>
 
       <FocusMode focusUntil={focusUntil} />

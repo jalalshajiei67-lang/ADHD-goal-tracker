@@ -3,6 +3,10 @@
 Supersedes the technical sections (§8–§13, §18) of the original spec. Product sections
 (§1–§7: flows, ADHD principles) still apply except where noted here.
 
+> v2 additions (reasons, next step, focus timer, repeats, share target, weekly review,
+> heartbeat, push retry, login limiting) are specified in `PLAN-V2.md` and summarized in the
+> v2 decisions table at the bottom of this file.
+
 ## Decisions
 
 | # | Decision | Why |
@@ -180,3 +184,20 @@ Side benefit: constant DB activity prevents the free-tier inactivity pause.
 
 AC-10 (QStash budget) is obsolete. Replacement: tick route stays well under Vercel Hobby limits
 (288 invocations/day).
+
+## v2 decisions (implemented)
+
+| # | Decision | Why |
+|---|---|---|
+| D-11 | Minutes-of-day everywhere; a 24:00 window summarizes yesterday on the first tick after midnight. Planning cutoff for a 24:00 window is the nightly hour. | The old hour comparison could never fire at 24:00, so summaries and the home window state were unreachable. |
+| D-12 | Push sends retry network/429/5xx up to 3 times (250 ms, 1 s); 404/410 clears the subscription; 400/401/403 never retry. | A transient FCM blip should not lose a reminder; duplicate risk stays low via the notification tag. |
+| D-13 | Heartbeat via `users.last_tick_at` / `last_push_at`, shown in Settings with a 15-minute warning. | A dead cron looked exactly like "no goals today". |
+| D-14 | One `goals.next_step` (160 chars) instead of subtasks. | The failure mode is starting, not tracking a tree. |
+| D-15 | Reasons stored on `checkins.reason`, chosen after Not yet. | Makes the weekly review explain *why*, and can trigger a smaller step. |
+| D-16 | `focus_until` set by 25 min on the card and 1/2/4 h in Settings. Finishing the focused goal ends focus. | One source of truth; no second timer. |
+| D-17 | Repeats are suggestion chips, not auto-created goals. | Automatic goals add clutter; one tap keeps control. |
+| D-18 | Share target inserts directly, with a 10-minute cookie through login. | Capture should not require an editing detour. |
+| D-19 | Review shows completion, rollovers and reasons; no streaks. | A missed day is data, not a failure. |
+| D-20 | One push device (last subscriber wins), surfaced in Settings. | Keeps the schema and claim logic simple. |
+| D-21 | Login limited to 5 failures per IP per 15 min, stored in `login_attempts`. | Serverless instances share the DB; memory would not. |
+| D-22 | DB tests run with `SUPABASE_TEST_URL` and in a separate CI job. | Fast unit feedback, real SQL coverage on demand. |

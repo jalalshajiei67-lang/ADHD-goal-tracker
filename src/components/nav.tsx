@@ -3,6 +3,7 @@ import Link from "next/link";
 const links = [
   { href: "/", label: "Now" },
   { href: "/goals", label: "Goals" },
+  { href: "/review", label: "Review" },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -13,7 +14,7 @@ export function Nav() {
         <Link
           key={l.href}
           href={l.href}
-          className="inline-flex min-h-12 min-w-20 items-center justify-center rounded-xl px-3 font-medium text-muted hover:text-foreground"
+          className="inline-flex min-h-12 min-w-0 flex-1 items-center justify-center rounded-xl px-2 font-medium text-muted hover:text-foreground"
         >
           {l.label}
         </Link>

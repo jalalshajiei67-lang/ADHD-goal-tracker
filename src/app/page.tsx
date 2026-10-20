@@ -2,12 +2,13 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { CheckinCard } from "@/components/checkin-card";
 import { EnablePush } from "@/components/enable-push";
+import { FocusCard } from "@/components/focus-card";
 import { Nav } from "@/components/nav";
 import { btn, card } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
-import { getDayWithGoals, lastCheckinAt } from "@/lib/data";
+import { getDayWithGoals, lastCheckinAt, notYetInARow } from "@/lib/data";
 import { activeGoal } from "@/lib/plan";
-import { localTime } from "@/lib/time";
+import { localTime, minutesOfDay } from "@/lib/time";
 
 export default function HomePage() {
   return (
@@ -24,7 +25,9 @@ async function Home() {
   const { goals } = await getDayWithGoals(user.id, local.date);
   const active = activeGoal(goals);
   const done = goals.filter((g) => g.completed_at !== null).length;
-  const windowOver = local.hour >= user.checkin_end_hour;
+  const windowOver = minutesOfDay(local) >= user.checkin_end_hour * 60;
+  const focusUntil =
+    user.focus_until && new Date(user.focus_until) > now ? user.focus_until : null;
 
   let content;
   if (windowOver) {
@@ -44,6 +47,9 @@ async function Home() {
             See today
           </Link>
         )}
+        <Link href="/review" className={btn.secondary}>
+          See the last 7 days
+        </Link>
       </section>
     );
   } else if (goals.length === 0) {
@@ -68,13 +74,20 @@ async function Home() {
         </p>
       </section>
     );
+  } else if (focusUntil) {
+    content = (
+      <FocusCard goal={{ id: active.id, title: active.title }} until={focusUntil} />
+    );
   } else {
     const last = await lastCheckinAt(user.id);
+    const notYetCount = await notYetInARow(active.id);
     content = (
       <CheckinCard
-        goal={{ id: active.id, title: active.title }}
+        key={active.id}
+        goal={{ id: active.id, title: active.title, nextStep: active.next_step }}
         doneToday={done}
         lastAskedAt={last?.toISOString() ?? null}
+        notYetCount={notYetCount}
       />
     );
   }

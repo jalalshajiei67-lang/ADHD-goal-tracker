@@ -22,7 +22,7 @@ export function FocusMode({ focusUntil }: { focusUntil: string | null }) {
           <button
             className={`${option} col-span-3`}
             disabled={pending}
-            onClick={() => startTransition(() => setFocus(0))}
+            onClick={() => startTransition(() => { void setFocus(0); })}
           >
             Resume check-ins
           </button>
@@ -32,7 +32,7 @@ export function FocusMode({ focusUntil }: { focusUntil: string | null }) {
               key={h}
               className={option}
               disabled={pending}
-              onClick={() => startTransition(() => setFocus(h))}
+              onClick={() => startTransition(() => { void setFocus(h * 60); })}
             >
               {h} h
             </button>
